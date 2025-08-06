@@ -132,7 +132,7 @@ class JoffreSingleCheck:
     def send_daily_summary(self):
         current_hour = datetime.now().hour
         
-        if current_hour in [8, 20]:
+        if current_hour in [7, 19]:
             message = f"📊 <b>Joffre Lakes Daily Check</b>\n"
             message += f"📅 {datetime.now().strftime('%Y-%m-%d %H:%M')}\n\n"
             message += f"🔍 Monitoring active - checking every 10 minutes\n"
@@ -162,7 +162,7 @@ class JoffreSingleCheck:
             logger.error(f"Single check failed: {e}")
             
             current_hour = datetime.now().hour
-            if 8 <= current_hour <= 22:
+            if 7 <= current_hour <= 22:
                 error_message = f"⚠️ <b>Monitor Error</b>\n\n"
                 error_message += f"Failed to check Joffre Lakes availability\n"
                 error_message += f"Error: {str(e)}\n"
