@@ -7,6 +7,7 @@ import requests
 import json
 import logging
 from datetime import datetime
+import pytz
 import os
 from bs4 import BeautifulSoup
 import time
@@ -19,7 +20,8 @@ class JoffreSingleCheck:
         self.bot_token = os.getenv('TELEGRAM_BOT_TOKEN')
         self.chat_id = os.getenv('TELEGRAM_CHAT_ID')
         self.base_url = "https://reserve.bcparks.ca"
-        
+        self.timezone = pytz.timezone('Vancouver')  # Change as needed
+
         self.session = requests.Session()
         self.session.headers.update({
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
@@ -110,7 +112,7 @@ class JoffreSingleCheck:
                 message += f"📍 <b>Location:</b> Joffre Lakes Provincial Park\n"
                 message += f"🎫 <b>Status:</b> Availability indicators found\n"
                 message += f"🔗 <b>CHECK NOW:</b> {source_url}\n"
-                message += f"⏰ <b>Found:</b> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+                message += f"⏰ <b>Found:</b> {now.strftime('%Y-%m-%d %H:%M:%S')}\n\n"
                 message += f"💨 <b>URGENT:</b> Joffre Lakes spots disappear within minutes!\n"
                 message += f"🏃‍♂️ <b>Go book immediately!</b>"
                 
@@ -130,11 +132,12 @@ class JoffreSingleCheck:
             return False
     
     def send_daily_summary(self):
-        current_hour = datetime.now().hour
+         now = datetime.now(self.timezone)
+         current_hour = now.hour
         
         if current_hour in [7, 19]:
             message = f"📊 <b>Joffre Lakes Daily Check</b>\n"
-            message += f"📅 {datetime.now().strftime('%Y-%m-%d %H:%M')}\n\n"
+            message += f"📅 {now.strftime('%Y-%m-%d %H:%M')}\n\n"
             message += f"🔍 Monitoring active - checking every 10 minutes\n"
             message += f"🏔️ No availability found in recent checks\n"
             message += f"📱 You'll get instant alerts when spots open up"
@@ -142,7 +145,7 @@ class JoffreSingleCheck:
             self.send_telegram(message)
     
     def run_single_check(self):
-        start_time = datetime.now()
+        start_time = datetime.now(self.timezone)
         logger.info("=== Starting Joffre Lakes availability check ===")
         
         try:
@@ -155,18 +158,20 @@ class JoffreSingleCheck:
             
             self.send_daily_summary()
             
-            duration = (datetime.now() - start_time).total_seconds()
+            duration = (datetime.now(self.timezone) - start_time).total_seconds()
             logger.info(f"Check completed in {duration:.2f} seconds")
             
         except Exception as e:
             logger.error(f"Single check failed: {e}")
             
-            current_hour = datetime.now().hour
+            now = datetime.now(self.timezone)
+            current_hour = now.hour
+            
             if 7 <= current_hour <= 22:
                 error_message = f"⚠️ <b>Monitor Error</b>\n\n"
                 error_message += f"Failed to check Joffre Lakes availability\n"
                 error_message += f"Error: {str(e)}\n"
-                error_message += f"Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+                error_message += f"Time: {now.strftime('%Y-%m-%d %H:%M:%S')}"
                 
                 self.send_telegram(error_message)
         
