@@ -20,7 +20,7 @@ class JoffreSingleCheck:
         self.bot_token = os.getenv('TELEGRAM_BOT_TOKEN')
         self.chat_id = os.getenv('TELEGRAM_CHAT_ID')
         self.base_url = "https://reserve.bcparks.ca"
-        self.timezone = pytz.timezone('Vancouver')  # Change as needed
+        self.timezone = pytz.timezone('America/Vancouver')  # Change as needed
 
         self.session = requests.Session()
         self.session.headers.update({
