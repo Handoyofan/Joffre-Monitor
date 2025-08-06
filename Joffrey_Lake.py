@@ -132,8 +132,8 @@ class JoffreSingleCheck:
             return False
     
     def send_daily_summary(self):
-         now = datetime.now(self.timezone)
-         current_hour = now.hour
+        now = datetime.now(self.timezone)
+        current_hour = now.hour
         
         if current_hour in [7, 19]:
             message = f"📊 <b>Joffre Lakes Daily Check</b>\n"
