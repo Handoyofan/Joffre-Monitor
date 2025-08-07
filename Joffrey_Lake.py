@@ -86,6 +86,7 @@ class JoffreSingleCheck:
     
     def parse_for_joffre_availability(self, html_content, source_url):
         try:
+            now = datetime.now(self.timezone)
             soup = BeautifulSoup(html_content, 'html.parser')
             page_text = soup.get_text().lower()
             
