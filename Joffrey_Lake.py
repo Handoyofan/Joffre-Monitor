@@ -323,12 +323,12 @@ class MultiParkMonitor:
                 'choose date', 'select time', 'purchase', 'add to cart',
                 'book online', 'reservation available', 'make reservation',
                 'day use pass', 'day pass available', 'passes available',
-                'book this date', 'available for booking', 'reserve this date'
+                'book this date', 'Pass availability - Low', 'reserve this date'
             ]
             
             unavailable_indicators = [
                 'sold out', 'fully booked', 'no availability', 'unavailable',
-                'no passes available', 'booking closed', 'not available',
+                'no passes available', 'booking closed', 'Pass availability - Full',
                 'waitlist only', 'no day use passes', 'passes sold out',
                 'date unavailable', 'not accepting reservations', 'fully reserved'
             ]
@@ -338,7 +338,7 @@ class MultiParkMonitor:
             
             # Look for interactive elements
             booking_buttons = soup.find_all(['button', 'a'], string=lambda text: 
-                text and any(word in text.lower() for word in ['book', 'reserve', 'purchase', 'select', 'available']))
+                text and any(word in text.lower() for word in ['book', Pass availability - Low', 'purchase', 'select', 'available']))
             
             date_inputs = soup.find_all(['input', 'select'], attrs={
                 'name': lambda x: x and any(word in x.lower() for word in ['date', 'arrival', 'visit'])
