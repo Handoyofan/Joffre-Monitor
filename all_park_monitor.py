@@ -1,21 +1,22 @@
 #!/usr/bin/env python3
 """
-Multi-Park Availability Tester - Test the logic with different parks
+Joffre Lakes Monitor - Check Today, Tomorrow, and Day After Tomorrow
 """
 
 import requests
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 import pytz
 import os
 from bs4 import BeautifulSoup
 import time
+from urllib.parse import urlencode
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-class MultiParkTester:
+class JoffreThreeDaysMonitor:
     def __init__(self):
         self.bot_token = os.getenv('TELEGRAM_BOT_TOKEN')
         self.chat_id = os.getenv('TELEGRAM_CHAT_ID')
@@ -24,59 +25,67 @@ class MultiParkTester:
 
         self.session = requests.Session()
         self.session.headers.update({
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.5',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1'
         })
         
-        # Test parks that are more likely to have availability
-        self.test_parks = {
-            'alice-lake': {
-                'name': 'Alice Lake Provincial Park',
-                'keywords': ['alice lake', 'alice'],
-                'urls': [
-                    f"{self.base_url}/facility/alice-lake-provincial-park",
-                    f"{self.base_url}/dayuse/registration?facility=alice-lake-provincial-park"
-                ]
-            },
-            'cultus-lake': {
-                'name': 'Cultus Lake Provincial Park',
-                'keywords': ['cultus lake', 'cultus'],
-                'urls': [
-                    f"{self.base_url}/facility/cultus-lake-provincial-park",
-                    f"{self.base_url}/dayuse/registration?facility=cultus-lake-provincial-park"
-                ]
-            },
-            'golden-ears': {
-                'name': 'Golden Ears Provincial Park',
-                'keywords': ['golden ears', 'golden'],
-                'urls': [
-                    f"{self.base_url}/facility/golden-ears-provincial-park",
-                    f"{self.base_url}/dayuse/registration?facility=golden-ears-provincial-park"
-                ]
-            },
-            'Garibaldi': {
-                'name': 'Garibaldi Provincial Park',
-                'keywords': ['Garibaldi', 'Garibaldii'],
-                'urls': [
-                    f"{self.base_url}/facility/Garibaldi-provincial-park",
-                    f"{self.base_url}/dayuse/registration?facility=Garibaldi-provincial-park"
-                ]
-            },
-            'joffre': {
-                'name': 'Joffre Lakes Provincial Park',
-                'keywords': ['joffre', 'joffrey'],
-                'urls': [
-                    f"{self.base_url}/facility/joffre-lakes-provincial-park",
-                    f"{self.base_url}/dayuse/registration?facility=joffre-lakes-provincial-park"
-                ]
-            }
+        if not self.bot_token or not self.chat_id:
+            raise ValueError("Missing Telegram credentials")
+        
+        # Test telegram connection on startup
+        self.test_telegram_connection()
+    
+    def get_target_dates(self):
+        """Get today, tomorrow, and day after tomorrow"""
+        now = datetime.now(self.timezone)
+        dates = {
+            'today': now,
+            'tomorrow': now + timedelta(days=1),
+            'day_after': now + timedelta(days=2)
+        }
+        return dates
+    
+    def format_date_for_url(self, date_obj):
+        """Format date for different URL parameter formats"""
+        return {
+            'iso_date': date_obj.strftime('%Y-%m-%d'),
+            'url_date': date_obj.strftime('%Y-%m-%d'),
+            'display_date': date_obj.strftime('%B %d, %Y'),
+            'short_date': date_obj.strftime('%m/%d/%Y'),
+            'day_name': date_obj.strftime('%A')
         }
     
-    def send_telegram(self, message):
-        """Send telegram message (optional - only if credentials provided)"""
-        if not self.bot_token or not self.chat_id:
-            logger.info("No Telegram credentials - skipping notification")
-            return True
+    def test_telegram_connection(self):
+        """Test if Telegram bot is working"""
+        try:
+            url = f"https://api.telegram.org/bot{self.bot_token}/getMe"
+            response = requests.get(url, timeout=10)
             
+            if response.status_code == 200:
+                bot_info = response.json()
+                logger.info(f"✅ Telegram bot connected: {bot_info['result']['username']}")
+                
+                target_dates = self.get_target_dates()
+                
+                test_message = f"🤖 <b>Joffre Lakes Monitor Started</b>\n\n"
+                test_message += f"📅 <b>Checking 3 Days:</b>\n"
+                test_message += f"   🔹 Today: {self.format_date_for_url(target_dates['today'])['display_date']} ({target_dates['today'].strftime('%A')})\n"
+                test_message += f"   🔹 Tomorrow: {self.format_date_for_url(target_dates['tomorrow'])['display_date']} ({target_dates['tomorrow'].strftime('%A')})\n"
+                test_message += f"   🔹 Day After: {self.format_date_for_url(target_dates['day_after'])['display_date']} ({target_dates['day_after'].strftime('%A')})\n\n"
+                test_message += f"🔍 <b>Status:</b> Bot is online and monitoring!"
+                
+                self.send_telegram(test_message)
+            else:
+                logger.error(f"❌ Telegram bot test failed: {response.status_code}")
+                
+        except Exception as e:
+            logger.error(f"❌ Telegram connection test error: {e}")
+    
+    def send_telegram(self, message):
         try:
             url = f"https://api.telegram.org/bot{self.bot_token}/sendMessage"
             payload = {
@@ -91,240 +100,328 @@ class MultiParkTester:
                 logger.info("✅ Telegram notification sent successfully")
                 return True
             else:
-                logger.error(f"❌ Telegram API error: {response.status_code}")
+                logger.error(f"❌ Telegram API error: {response.status_code} - {response.text}")
                 return False
                 
         except Exception as e:
             logger.error(f"❌ Failed to send Telegram message: {e}")
             return False
     
-    def save_debug_html(self, html_content, park_name, url):
-        """Save HTML content for debugging"""
-        timestamp = int(time.time())
-        filename = f"debug_{park_name}_{timestamp}.html"
+    def build_joffre_urls(self, target_date, day_label):
+        """Build URLs with date parameters for Joffre Lakes"""
+        date_info = self.format_date_for_url(target_date)
         
-        try:
-            with open(filename, 'w', encoding='utf-8') as f:
-                f.write(f"<!-- Source URL: {url} -->\n")
-                f.write(f"<!-- Timestamp: {datetime.now()} -->\n\n")
-                f.write(html_content)
+        urls = [
+            # Main facility page
+            f"{self.base_url}/facility/joffre-lakes-provincial-park",
             
-            logger.info(f"💾 Saved debug HTML: {filename}")
-            return filename
-        except Exception as e:
-            logger.error(f"❌ Failed to save debug HTML: {e}")
-            return None
-    
-    def check_park_availability(self, park_key):
-        """Check availability for a specific park"""
-        park_info = self.test_parks[park_key]
-        logger.info(f"\n🏞️ Testing: {park_info['name']}")
-        logger.info("=" * 60)
+            # Day use registration with date parameter
+            f"{self.base_url}/dayuse/registration?facility=joffre-lakes-provincial-park&date={date_info['iso_date']}",
+            
+            # Alternative date formats
+            f"{self.base_url}/dayuse/registration?facility=joffre-lakes-provincial-park&arrivalDate={date_info['iso_date']}",
+            
+            # General day use page with date
+            f"{self.base_url}/dayuse/registration?date={date_info['iso_date']}",
+            
+            # Search with facility and date
+            f"{self.base_url}/search?facility=joffre-lakes-provincial-park&date={date_info['iso_date']}&partySize=1",
+            
+            # Booking page variations
+            f"{self.base_url}/booking/joffre-lakes-provincial-park?date={date_info['iso_date']}",
+            f"{self.base_url}/facility/joffre-lakes?date={date_info['iso_date']}"
+        ]
         
+        return urls
+    
+    def check_single_date_availability(self, target_date, day_label):
+        """Check availability for a single date"""
+        date_info = self.format_date_for_url(target_date)
+        
+        logger.info(f"\n📅 Checking {day_label.upper()}: {date_info['display_date']} ({date_info['day_name']})")
+        logger.info("-" * 70)
+        
+        urls_to_check = self.build_joffre_urls(target_date, day_label)
         availability_found = False
         
-        for url in park_info['urls']:
+        for i, url in enumerate(urls_to_check, 1):
             try:
-                logger.info(f"🔍 Checking URL: {url}")
+                logger.info(f"🔍 [{i}/{len(urls_to_check)}] {url}")
                 response = self.session.get(url, timeout=15)
                 
                 if response.status_code == 200:
-                    logger.info(f"✅ Successfully loaded ({len(response.text)} chars)")
+                    logger.info(f"✅ Loaded ({len(response.text)} chars)")
                     
-                    # Save HTML for debugging
-                    self.save_debug_html(response.text, park_key, url)
+                    # Save debug content
+                    self.save_debug_content(response.text, f"{day_label}_check_{i}", url, target_date, day_label)
                     
-                    if self.parse_for_availability(response.text, url, park_info):
+                    if self.parse_for_joffre_availability(response.text, url, target_date, day_label):
                         availability_found = True
                         break
                 else:
-                    logger.warning(f"⚠️ HTTP {response.status_code} for {url}")
-                        
+                    logger.warning(f"⚠️ HTTP {response.status_code}")
+                    
             except Exception as e:
-                logger.warning(f"⚠️ Error checking {url}: {e}")
+                logger.warning(f"⚠️ Error: {e}")
                 continue
             
             time.sleep(1)  # Be respectful
         
+        result_emoji = "✅" if availability_found else "❌"
+        logger.info(f"{result_emoji} {day_label.capitalize()} result: {'AVAILABLE' if availability_found else 'NOT AVAILABLE'}")
+        
         return availability_found
     
-    def parse_for_availability(self, html_content, source_url, park_info):
-        """Parse HTML content for availability indicators"""
+    def check_all_dates_availability(self):
+        """Check availability for all three dates"""
+        try:
+            target_dates = self.get_target_dates()
+            results = {}
+            
+            # Check each date
+            for day_key, date_obj in target_dates.items():
+                day_labels = {
+                    'today': 'today',
+                    'tomorrow': 'tomorrow', 
+                    'day_after': 'day after tomorrow'
+                }
+                
+                day_label = day_labels[day_key]
+                availability_found = self.check_single_date_availability(date_obj, day_label)
+                
+                results[day_key] = {
+                    'date': date_obj,
+                    'label': day_label,
+                    'available': availability_found
+                }
+                
+                # Small delay between date checks
+                time.sleep(2)
+            
+            return results
+            
+        except Exception as e:
+            logger.error(f"❌ Multi-date check failed: {e}")
+            return {}
+    
+    def save_debug_content(self, html_content, filename_prefix, source_url, target_date, day_label):
+        """Save debug content for analysis"""
+        try:
+            timestamp = int(time.time())
+            date_str = target_date.strftime('%Y%m%d')
+            
+            # Save HTML
+            html_filename = f"debug_{filename_prefix}_{date_str}_{timestamp}.html"
+            with open(html_filename, 'w', encoding='utf-8') as f:
+                f.write(f"<!-- Day Label: {day_label} -->\n")
+                f.write(f"<!-- Target Date: {target_date.strftime('%Y-%m-%d %A')} -->\n")
+                f.write(f"<!-- Source URL: {source_url} -->\n")
+                f.write(f"<!-- Generated: {datetime.now()} -->\n\n")
+                f.write(html_content)
+            
+            # Save text version
+            soup = BeautifulSoup(html_content, 'html.parser')
+            text_content = soup.get_text()
+            
+            text_filename = f"debug_{filename_prefix}_{date_str}_{timestamp}.txt"
+            with open(text_filename, 'w', encoding='utf-8') as f:
+                f.write(f"Day Label: {day_label}\n")
+                f.write(f"Target Date: {target_date.strftime('%Y-%m-%d %A')}\n")
+                f.write(f"Source URL: {source_url}\n")
+                f.write(f"Generated: {datetime.now()}\n")
+                f.write("=" * 80 + "\n\n")
+                f.write(text_content)
+            
+            logger.debug(f"💾 Saved: {html_filename}, {text_filename}")
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to save debug content: {e}")
+    
+    def parse_for_joffre_availability(self, html_content, source_url, target_date, day_label):
         try:
             now = datetime.now(self.timezone)
             soup = BeautifulSoup(html_content, 'html.parser')
             page_text = soup.get_text().lower()
             
-            # Save a text version for easier debugging
-            with open(f"debug_text_{park_info['name'].replace(' ', '_')}_{int(time.time())}.txt", 'w', encoding='utf-8') as f:
-                f.write(f"Source URL: {source_url}\n")
-                f.write(f"Timestamp: {now}\n")
-                f.write("=" * 80 + "\n\n")
-                f.write(page_text)
+            # Check for Joffre Lakes content
+            joffre_keywords = ['joffre', 'joffrey']
+            has_joffre_content = any(keyword in page_text for keyword in joffre_keywords)
             
-            # Check if this page mentions the park
-            has_park_content = any(keyword in page_text for keyword in park_info['keywords'])
+            # Check for the specific date
+            date_info = self.format_date_for_url(target_date)
+            date_keywords = [
+                date_info['iso_date'],
+                target_date.strftime('%B %d').lower(),
+                target_date.strftime('%b %d').lower(),
+                target_date.strftime('%d %B').lower(),
+                target_date.strftime('%m/%d'),
+                target_date.strftime('%-d').lower()
+            ]
             
-            logger.info(f"📝 Page content length: {len(page_text)} characters")
-            logger.info(f"🎯 Park keywords found: {has_park_content}")
+            has_target_date = any(date_keyword in page_text for date_keyword in date_keywords)
             
-            if not has_park_content:
-                logger.info(f"❌ No {park_info['name']} content found on this page")
+            logger.debug(f"   Joffre content: {has_joffre_content}, Target date: {has_target_date}")
+            
+            if not has_joffre_content:
                 return False
             
-            logger.info(f"✅ Found {park_info['name']} content, analyzing...")
-            
-            # Comprehensive availability indicators
+            # Enhanced availability indicators
             availability_indicators = [
                 'available', 'book now', 'reserve now', 'select date', 
                 'choose date', 'select time', 'purchase', 'add to cart',
                 'book online', 'reservation available', 'make reservation',
-                'day use pass', 'day pass available'
+                'day use pass', 'day pass available', 'passes available',
+                'book this date', 'available for booking', 'reserve this date'
             ]
             
             unavailable_indicators = [
                 'sold out', 'fully booked', 'no availability', 'unavailable',
                 'no passes available', 'booking closed', 'not available',
-                'waitlist only', 'no day use passes', 'passes sold out'
+                'waitlist only', 'no day use passes', 'passes sold out',
+                'date unavailable', 'not accepting reservations', 'fully reserved'
             ]
             
-            # Check for text indicators
-            found_availability_words = [ind for ind in availability_indicators if ind in page_text]
-            found_unavailable_words = [ind for ind in unavailable_indicators if ind in page_text]
+            found_availability = [ind for ind in availability_indicators if ind in page_text]
+            found_unavailable = [ind for ind in unavailable_indicators if ind in page_text]
             
-            logger.info(f"📊 Availability indicators found: {found_availability_words}")
-            logger.info(f"📊 Unavailable indicators found: {found_unavailable_words}")
-            
-            # Look for booking buttons and form elements
+            # Look for interactive elements
             booking_buttons = soup.find_all(['button', 'a'], string=lambda text: 
-                text and any(word in text.lower() for word in ['book', 'reserve', 'purchase', 'select']))
+                text and any(word in text.lower() for word in ['book', 'reserve', 'purchase', 'select', 'available']))
             
-            date_inputs = soup.find_all(['input', 'select'], {'name': lambda x: x and 'date' in x.lower()})
+            date_inputs = soup.find_all(['input', 'select'], attrs={
+                'name': lambda x: x and any(word in x.lower() for word in ['date', 'arrival', 'visit'])
+            })
             
-            logger.info(f"🔘 Booking buttons found: {len(booking_buttons)}")
-            logger.info(f"📅 Date inputs found: {len(date_inputs)}")
+            has_interactive_elements = len(booking_buttons) > 0 or len(date_inputs) > 0
             
-            if booking_buttons:
-                logger.info("📝 Booking button texts:")
-                for btn in booking_buttons[:3]:  # Show first 3
-                    btn_text = btn.get_text(strip=True) if btn.get_text() else btn.get('title', 'No text')
-                    logger.info(f"   - {btn_text}")
+            logger.debug(f"   Availability terms: {found_availability}")
+            logger.debug(f"   Unavailable terms: {found_unavailable}")
+            logger.debug(f"   Interactive elements: {has_interactive_elements}")
             
             # Decision logic
-            has_availability_text = len(found_availability_words) > 0
-            has_unavailable_text = len(found_unavailable_words) > 0
-            has_booking_elements = len(booking_buttons) > 0 or len(date_inputs) > 0
+            has_availability_text = len(found_availability) > 0
+            has_unavailable_text = len(found_unavailable) > 0
             
-            logger.info(f"\n🔍 ANALYSIS SUMMARY:")
-            logger.info(f"   Availability text indicators: {has_availability_text}")
-            logger.info(f"   Unavailable text indicators: {has_unavailable_text}")
-            logger.info(f"   Booking form elements: {has_booking_elements}")
-            
-            # Make decision
-            if (has_availability_text or has_booking_elements) and not has_unavailable_text:
-                logger.info("🎉 AVAILABILITY DETECTED!")
+            if (has_availability_text or has_interactive_elements) and not has_unavailable_text:
+                logger.info(f"🎉 AVAILABILITY DETECTED FOR {day_label.upper()}!")
                 
-                message = f"🏞️ <b>{park_info['name'].upper()} AVAILABILITY!</b> 🎉\n\n"
-                message += f"📍 <b>Park:</b> {park_info['name']}\n"
+                message = f"🏔️ <b>JOFFRE LAKES AVAILABLE!</b> 🎉\n\n"
+                message += f"📅 <b>DATE:</b> {date_info['display_date']}\n"
+                message += f"🗓️ <b>Day:</b> {date_info['day_name']}\n"
+                message += f"⏰ <b>When:</b> {day_label.title()}\n\n"
                 message += f"🎫 <b>Status:</b> Availability detected\n"
-                message += f"🔗 <b>URL:</b> {source_url}\n"
-                message += f"⏰ <b>Time:</b> {now.strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+                message += f"🔗 <b>BOOK NOW:</b> {source_url}\n\n"
                 
-                if found_availability_words:
-                    message += f"📝 <b>Found:</b> {', '.join(found_availability_words[:3])}\n"
-                if booking_buttons:
-                    message += f"🔘 <b>Buttons:</b> {len(booking_buttons)} booking elements\n"
+                if found_availability:
+                    message += f"✅ <b>Indicators:</b> {', '.join(found_availability[:2])}\n"
+                if has_interactive_elements:
+                    message += f"🔘 <b>Booking:</b> Interactive elements found\n"
                 
-                message += f"\n🏃‍♂️ <b>Go check it out!</b>"
+                message += f"\n⚡ <b>URGENT:</b> Joffre spots disappear in minutes!\n"
+                message += f"🏃‍♂️ <b>Book immediately!</b>\n\n"
+                message += f"🕐 <b>Found:</b> {now.strftime('%H:%M:%S')}"
                 
                 self.send_telegram(message)
                 return True
             
             elif has_unavailable_text:
-                logger.info("❌ Park confirmed unavailable")
+                logger.debug(f"❌ {day_label.capitalize()} unavailable")
                 return False
             
             else:
-                logger.info("❓ Park availability status unclear")
+                logger.debug(f"❓ {day_label.capitalize()} status unclear")
                 return False
                 
         except Exception as e:
-            logger.error(f"❌ Error parsing content: {e}")
+            logger.error(f"❌ Parse error for {day_label}: {e}")
             return False
     
-    def test_all_parks(self):
-        """Test availability detection with all parks"""
-        logger.info("🚀 Starting Multi-Park Availability Test")
-        logger.info("=" * 80)
+    def send_summary_notification(self, results):
+        """Send a summary of all date checks"""
+        now = datetime.now(self.timezone)
+        current_hour = now.hour
         
-        results = {}
-        
-        for park_key in self.test_parks.keys():
-            try:
-                availability_found = self.check_park_availability(park_key)
-                results[park_key] = {
-                    'name': self.test_parks[park_key]['name'],
-                    'availability_found': availability_found
-                }
-                
-                logger.info(f"Result: {'✅ AVAILABLE' if availability_found else '❌ NOT AVAILABLE'}")
-                
-            except Exception as e:
-                logger.error(f"❌ Failed to test {park_key}: {e}")
-                results[park_key] = {
-                    'name': self.test_parks[park_key]['name'],
-                    'availability_found': False,
-                    'error': str(e)
-                }
+        # Send summary during daytime hours
+        if 6 <= current_hour <= 23:
+            available_dates = [info for info in results.values() if info['available']]
             
-            logger.info("-" * 40)
-            time.sleep(2)  # Be respectful between requests
-        
-        # Summary
-        logger.info("\n📊 FINAL RESULTS SUMMARY:")
+            if available_dates:
+                # At least one date available - already sent individual notifications
+                return
+            
+            # No availability found - send summary
+            message = f"📊 <b>Joffre Lakes Check Summary</b>\n\n"
+            
+            for day_key in ['today', 'tomorrow', 'day_after']:
+                if day_key in results:
+                    info = results[day_key]
+                    date_str = self.format_date_for_url(info['date'])
+                    status = "✅ AVAILABLE" if info['available'] else "❌ No availability"
+                    message += f"🔹 <b>{info['label'].title()}:</b> {date_str['display_date']} ({date_str['day_name']}) - {status}\n"
+            
+            message += f"\n⏰ <b>Checked:</b> {now.strftime('%Y-%m-%d %H:%M:%S')}\n"
+            message += f"🔄 <b>Next check:</b> Next scheduled run\n\n"
+            message += f"📱 You'll get instant alerts when spots appear!"
+            
+            # Only send summary every few hours to avoid spam
+            if current_hour in [7, 12, 19]:
+                self.send_telegram(message)
+    
+    def run_comprehensive_check(self):
+        start_time = datetime.now(self.timezone)
+        logger.info("=" * 80)
+        logger.info("🚀 JOFFRE LAKES 3-DAY COMPREHENSIVE CHECK")
         logger.info("=" * 80)
         
-        available_parks = []
-        unavailable_parks = []
-        error_parks = []
-        
-        for park_key, result in results.items():
-            if 'error' in result:
-                error_parks.append(result['name'])
-                logger.info(f"❌ ERROR: {result['name']}")
-            elif result['availability_found']:
-                available_parks.append(result['name'])
-                logger.info(f"✅ AVAILABLE: {result['name']}")
+        try:
+            results = self.check_all_dates_availability()
+            
+            if results:
+                logger.info("\n📊 FINAL RESULTS:")
+                logger.info("=" * 50)
+                
+                total_available = 0
+                for day_key in ['today', 'tomorrow', 'day_after']:
+                    if day_key in results:
+                        info = results[day_key]
+                        status = "✅ AVAILABLE" if info['available'] else "❌ NOT AVAILABLE"
+                        logger.info(f"{status}: {info['label'].title()} - {self.format_date_for_url(info['date'])['display_date']}")
+                        if info['available']:
+                            total_available += 1
+                
+                logger.info(f"\n🎯 SUMMARY: {total_available}/3 dates have availability")
+                
+                # Send summary notification
+                self.send_summary_notification(results)
+            
             else:
-                unavailable_parks.append(result['name'])
-                logger.info(f"⭕ NOT AVAILABLE: {result['name']}")
+                logger.error("❌ No results obtained from date checks")
+            
+            duration = (datetime.now(self.timezone) - start_time).total_seconds()
+            logger.info(f"\n⏱️ Total check time: {duration:.2f} seconds")
+            
+        except Exception as e:
+            logger.error(f"❌ Comprehensive check failed: {e}")
+            
+            now = datetime.now(self.timezone)
+            if 6 <= now.hour <= 23:
+                error_message = f"⚠️ <b>Monitor Error</b>\n\n"
+                error_message += f"❌ Failed during 3-day availability check\n"
+                error_message += f"🐛 Error: {str(e)[:150]}\n"
+                error_message += f"⏰ Time: {now.strftime('%Y-%m-%d %H:%M:%S')}\n"
+                error_message += f"🔄 Will retry on next scheduled run"
+                
+                self.send_telegram(error_message)
         
-        # Send summary via Telegram
-        summary_msg = f"📊 <b>Multi-Park Test Complete</b>\n\n"
-        summary_msg += f"✅ <b>Available ({len(available_parks)}):</b>\n"
-        for park in available_parks:
-            summary_msg += f"  • {park}\n"
-        
-        summary_msg += f"\n⭕ <b>Not Available ({len(unavailable_parks)}):</b>\n"
-        for park in unavailable_parks:
-            summary_msg += f"  • {park}\n"
-        
-        if error_parks:
-            summary_msg += f"\n❌ <b>Errors ({len(error_parks)}):</b>\n"
-            for park in error_parks:
-                summary_msg += f"  • {park}\n"
-        
-        summary_msg += f"\n⏰ <b>Test completed:</b> {datetime.now(self.timezone).strftime('%Y-%m-%d %H:%M:%S')}"
-        
-        self.send_telegram(summary_msg)
-        
-        logger.info("\n🏁 Test completed! Check the generated debug files for detailed analysis.")
+        logger.info("=" * 80)
+        logger.info("✅ 3-DAY CHECK COMPLETED")
+        logger.info("=" * 80)
 
 def main():
     try:
-        logger.info("🚀 Initializing Multi-Park Tester...")
-        tester = MultiParkTester()
-        tester.test_all_parks()
+        logger.info("🚀 Starting Joffre Lakes 3-Day Monitor...")
+        checker = JoffreThreeDaysMonitor()
+        checker.run_comprehensive_check()
         
     except Exception as e:
         error_msg = f"💥 Fatal error: {e}"
